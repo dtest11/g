@@ -1,62 +1,88 @@
 #!/bin/bash
 
+# Define some colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Use them in echo statements
+echo -e "${RED}This is a red log message${NC}"
+echo -e "${GREEN}This is a green log message${NC}"
+echo -e "${YELLOW}This is a yellow log message${NC}"
+
 system=$(uname -s | tr '[:upper:]' '[:lower:]')
 architecture=$(uname -m)
-echo "System: $system"
-echo "Architecture: $architecture"
+url_version="https://go.dev/VERSION?m=text"
+source_url=""
+function rewrite_system_arch() {
+    if [ "$architecture" == "aarch64" ]; then
+        architecture="arm64"
+    fi
+}
+function version() {
+    echo -e "${RED} get current stable version ${VERSION}${NC}"
+    http_code=$(curl -o version_text -w '%{http_code}' "$url_version")
+    if [ "$http_code" != 200 ]; then
+        echo "https://go.dev/VERSION?m=text response is not valid"
+        exit 0
+    fi
+    VERSION=$(cat "version_text" | head -n 1)
+    echo -e "${RED} current stable version is ${VERSION}  ${NC}"
+    source_url="https://golang.google.cn/dl/$VERSION.$system-$architecture.tar.gz"
+}
 
-echo "**** 1.Get current stable version ****"
+function download_source() {
+    echo -e "${RED} download  ${VERSION} source from ${source_url}${NC}"
+    http_code=$(curl -LO "$source_url" -w '%{http_code}')
+    if [ "$http_code" != 200 ]; then
+        echo "download source code failed"
+        exit 0
+    fi
+}
 
-http_code=$(curl -sS -o /dev/null -w '%{http_code}' https://go.dev/VERSION?m=text)
-if [[ $http_code -eq 200 ]]; then
-    VERSION=$(curl -sS https://go.dev/VERSION?m=text | head -n 1)
-    echo "**** 2.Download: $VERSION ****"
+function unzip() {
+    echo -e "${RED}unzip source code to /usr/local/${NC}"
+    sudo tar -C /usr/local/ -xzf $VERSION.$system-$architecture.tar.gz
+}
 
-    url="https://golang.google.cn/dl/$VERSION.$system-$architecture.tar.gz"
-    echo "**** 3.Download from $url"
-
-    curl -LO $url 
-    curl_result=$?
-    if [[ $curl_result -eq 0 ]]; then
-        sudo tar -C /usr/local/ -xzf $VERSION.$system-$architecture.tar.gz
-
-        # Determine the current shell
-        shell=$(basename "$SHELL")
-
-        # Export GOPROXY and add Go binary path to PATH in corresponding shell configuration file
-        if [[ $shell == "zsh" ]]; then
-            if ! grep -q "GOPROXY" ~/.zshrc; then
-            echo "export GOPROXY=https://goproxy.cn,direct" >> ~/.zshrc
+function set_env() {
+    shell=$(basename "$SHELL")
+    if [ $shell == "zsh" ]; then
+        if ! grep -q "GOPROXY" ~/.zshrc; then
+            echo "export GOPROXY=https://goproxy.cn,direct" >>~/.zshrc
             source ~/.zshrc
-            fi
-               
-
-            if ! grep -q "/usr/local/go/bin" ~/.zshrc; then
-               echo "export PATH=\$PATH:/usr/local/go/bin" >> ~/.zshrc
-               source ~/.zshrc
-            fi
-
-           
-            
-        elif [[ $shell == "bash" ]]; then
-            if ! grep -q "GOPROXY" ~/.bashrc; then
-               echo "export GOPROXY=https://goproxy.cn,direct" >> ~/.bashrc
-               source ~/.bashrc
-
-            fi
-
-            if ! grep -q "/usr/local/go/bin" ~/.zshrbashrcc; then
-               echo "export PATH=\$PATH:/usr/local/go/bin" >> ~/.bashrc
-               source ~/.bashrc
-            fi
         fi
 
-        # Reload the shell configuration
-        rm $VERSION.$system-$architecture.tar.gz
-        echo "**** go install success******"
-    else
-        echo "Download failed with curl error code: $curl_result"
+        if ! grep -q "/usr/local/go/bin" ~/.zshrc; then
+            echo "export PATH=$PATH:/usr/local/go/bin" >>~/.zshrc
+            source ~/.zshrc
+        fi
+    elif [ $shell == "bash" ]; then
+        if ! grep -q "GOPROXY" ~/.bashrc; then
+            echo "export GOPROXY=https://goproxy.cn,direct" >>~/.bashrc
+            source ~/.zshrc
+        fi
+
+        if ! grep -q "/usr/local/go/bin" ~/.bashrc; then
+            echo "export PATH=$PATH:/usr/local/go/bin" >>~/.bashrc
+            source ~/.zshrc
+        fi
     fi
-else
-    echo "Failed to retrieve version information from https://go.dev/VERSION?m=text"
-fi
+}
+
+function clear() {
+    rm $VERSION.$system-$architecture.tar.gz
+    rm version_text
+}
+
+echo "System: $system"
+echo "Architecture: $architecture"
+rewrite_system_arch
+version
+download_source
+unzip
+set_env
+clear
+current_verison=$(go version)
+echo -e "${RED}current version:${current_verison}${NC}"
