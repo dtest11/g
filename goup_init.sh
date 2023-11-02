@@ -6,10 +6,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Use them in echo statements
-echo -e "${RED}This is a red log message${NC}"
-echo -e "${GREEN}This is a green log message${NC}"
-echo -e "${YELLOW}This is a yellow log message${NC}"
 
 system=$(uname -s | tr '[:upper:]' '[:lower:]')
 architecture=$(uname -m)
